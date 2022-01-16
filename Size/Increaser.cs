@@ -177,7 +177,11 @@ namespace PspEbootToolkit.Size
                     {
                         if (iShoffset[i] < iOffset[iPhnum])
                         {
-                            iShoffset[i] += Aligment;
+                            if(iShoffset[i] != 0)
+                            {
+                                iShoffset[i] += Aligment;
+                            }
+                            
                         }
                         else
                         {
