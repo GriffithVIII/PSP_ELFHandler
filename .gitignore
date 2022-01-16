@@ -1,6 +1,6 @@
 # Project files
-/bin/
-/.vs/
+bin/
+.vs/
 PspEbootToolkit.csproj.user
 PspEbootToolkit.csproj
 
