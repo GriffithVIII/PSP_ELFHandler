@@ -16,7 +16,7 @@ namespace PspEbootToolkit.Size
     class Increaser
     {
         private string TargetExe, TargetOutput;
-        private int iPhnum, iPhoff, iShoff, iShentsize, iShnum,
+        private int iPhnum, iPhoff, iShoff, iShsizeH, iShnum,
             IncreaseSize, EBOOTSize, Aligment = 0x40;
         private long StartR, LenghtR;
         private Encoding encoding = Encoding.GetEncoding(65001);
@@ -45,9 +45,9 @@ namespace PspEbootToolkit.Size
                 ORDS.Seek(0x2C);
                 iPhnum = ORDR.ReadInt16();//# Contains the number of entries in the program header table
                 ORDS.Seek(0x2E);
-                iShentsize = ORDR.ReadInt32();//# Contains the size of a section header table entry
+                iShsizeH = ORDR.ReadInt16();//# Contains the size of a section header table entry
                 ORDS.Seek(0x30);
-                iShnum = ORDR.ReadInt32();//# Contains the number of entries in the section header table
+                iShnum = ORDR.ReadInt16();//# Contains the number of entries in the section header table
 
                 //# Header entries, iPhnum = Programm Headers quantity
                 int[] iType = new int[iPhnum + 1];
@@ -58,6 +58,18 @@ namespace PspEbootToolkit.Size
                 int[] iMemsz = new int[iPhnum + 1];
                 int[] iFlags = new int[iPhnum + 1];
                 int[] iAlign = new int[iPhnum + 1];
+
+                //# Header section entries
+                int[] iShname = new int[iShnum];
+                int[] iShtype = new int[iShnum];
+                int[] iShflags = new int[iShnum];
+                int[] iShaddr = new int[iShnum];
+                int[] iShoffset = new int[iShnum];
+                int[] iShsize = new int[iShnum];
+                int[] iShlink = new int[iShnum];
+                int[] iShinfo = new int[iShnum];
+                int[] iShaddralign = new int[iShnum];
+                int[] iShentsize = new int[iShnum];
                 //# Must update -> iOffset, iPaddr
 
                 ORDS.Seek(iPhoff);//# Go to Programm header table
@@ -73,6 +85,21 @@ namespace PspEbootToolkit.Size
                     iAlign[i] = ORDR.ReadInt32();
                 }
 
+                ORDS.Seek(iShoff);//# Go to Section header table
+                for (int i = 0; i < iShnum; i++)
+                {
+                    iShname[i] = ORDR.ReadInt32();
+                    iShtype[i] = ORDR.ReadInt32();
+                    iShflags[i] = ORDR.ReadInt32();
+                    iShaddr[i] = ORDR.ReadInt32();
+                    iShoffset[i] = ORDR.ReadInt32();
+                    iShsize[i] = ORDR.ReadInt32();
+                    iShlink[i] = ORDR.ReadInt32();
+                    iShinfo[i] = ORDR.ReadInt32();
+                    iShaddralign[i] = ORDR.ReadInt32();
+                    iShentsize[i] = ORDR.ReadInt32();
+                }
+
                 using (DataStream DS = DataStreamFactory.FromFile(TargetOutput, FileOpenMode.Write)) //# Updated EBOOT
                 {
                     DataWriter DW = new DataWriter(DS)
@@ -86,7 +113,8 @@ namespace PspEbootToolkit.Size
                     DS.Seek(0);
                     //# Update offset of section header
                     ORDS.WriteSegmentTo(0, 0x20, DS);
-                    DW.Write((Int32)iShoff + IncreaseSize + Aligment);
+                    iShoff += IncreaseSize + Aligment;
+                    DW.Write((Int32)iShoff);
 
                     DS.Seek(0x24);
                     //# Update number of programm headers
@@ -141,7 +169,39 @@ namespace PspEbootToolkit.Size
                     DS.Seek(DS.Position + IncreaseSize);
 
                     StartR = iOffset[iPhnum];
-                    LenghtR = ORDS.Length - iOffset[iPhnum];
+                    LenghtR = iShoff - iOffset[iPhnum];
+                    ORDS.WriteSegmentTo(StartR, LenghtR, DS);//# Until section header table
+
+                    //# Old pointers section update
+                    for (int i = 0; i < iShnum - 1; i++)
+                    {
+                        if (iShoffset[i] < iOffset[iPhnum])
+                        {
+                            iShoffset[i] += Aligment;
+                        }
+                        else
+                        {
+                            iShoffset[i] += Aligment + IncreaseSize;
+                        }
+                    }
+
+                    DS.Seek(iShoff);//# Go to Section header table
+                    for (int i = 0; i < iShnum; i++)
+                    {
+                        DW.Write(iShname[i]);
+                        DW.Write(iShtype[i]);
+                        DW.Write(iShflags[i]);
+                        DW.Write(iShaddr[i]);
+                        DW.Write(iShoffset[i]);
+                        DW.Write(iShsize[i]);
+                        DW.Write(iShlink[i]);
+                        DW.Write(iShinfo[i]);
+                        DW.Write(iShaddralign[i]);
+                        DW.Write(iShentsize[i]);
+                    }
+
+                    StartR = (iShsizeH * iShnum) + (iShoff - (IncreaseSize + Aligment));
+                    LenghtR = ORDS.Length - StartR;
                     ORDS.WriteSegmentTo(StartR, LenghtR, DS);
                 }
             }
